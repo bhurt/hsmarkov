@@ -1,7 +1,7 @@
 
 import Data.Char
 import qualified Data.Map.Strict as Map
-import Data.List(foldl')
+import Data.List(foldl', sortBy)
 import System.Random
 
 data Sym =
@@ -33,7 +33,7 @@ ngrams [] = []
 ngrams [x] = []
 ngrams (x1:x2:xs) = (x1,x2) : ngrams (x2:xs)
 
-follows :: [ NGram ] -> WordCount -> WordCount
+follows :: WordCount -> [ NGram ] -> WordCount
 follows = foldl' go
     where
         go m (one, two) = Map.alter (go1 two) one m
@@ -45,28 +45,28 @@ follows = foldl' go
 
 wordCountFile :: FilePath -> WordCount -> IO WordCount
 wordCountFile filename wc = do
-    contents <- readFile
-    return $ follows (ngrams (Period : syms contents)) wc
+    contents <- readFile filename
+    return $ follows wc $ ngrams $ Period : syms contents
 
 makeProbs :: WordCount -> MarkovMat
 makeProbs = fmap go
     where
-        go m = n, sortBy cmp lst2
+        go m = (n, sortBy cmp lst2)
             where
-                lst = toList m
+                lst = Map.toList m
                 n = sum $ map snd lst
                 lst2 = map f lst
                 f (s, c) = (c, s)
-                cmp x y = compare (first y) (first x)
+                cmp x y = compare (fst y) (fst x)
 
 markovStep :: MarkovMat ->  Sym -> IO Sym
 markovStep mat s = case Map.lookup s mat of
                         Nothing -> return Period -- umm...
-                        Just lst -> getStdRandom (go lst)
+                        Just (cnt, lst) -> getStdRandom (go cnt lst)
     where
-        go lst stdGen =
-            let (i, stdGen') = next in
-            (go2 i lst, stdGen')
+        go cnt lst stdGen = (go2 (i `mod` cnt) lst, stdGen')
+            where
+                (i, stdGen') = next stdGen
         go2 _ [ (_, s) ] = s
         go2 i ((j, s) : xs) | i < j = s
                             | otherwise = go2 (i - j) xs
