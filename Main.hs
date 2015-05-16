@@ -3,6 +3,7 @@ import Data.Char
 import qualified Data.Map.Strict as Map
 import Data.List(foldl', sortBy)
 import System.Random
+import System.Environment
 
 data Sym =
     Word String
@@ -26,7 +27,9 @@ syms (x:xs) | isSpace x = syms xs
     where
         consumeWord w [] = [ Word (reverse w) ]
         consumeWord w (x:xs) | isAlpha x = consumeWord (x:w) xs
-                             | otherwise = (Word (reverse w)) : syms (x:xs)
+                             | otherwise = Word word : syms (x:xs)
+                                            where
+                                                word = map toLower $ reverse w
 
 ngrams :: [ Sym ] -> [ NGram ]
 ngrams [] = []
@@ -43,8 +46,10 @@ follows = foldl' go
         go2 (Just x) = Just (x + 1)
 
 
-wordCountFile :: FilePath -> WordCount -> IO WordCount
-wordCountFile filename wc = do
+wordCountFile :: IO WordCount -> FilePath -> IO WordCount
+wordCountFile wcio filename = do
+    wc <- wcio
+    putStrLn $ "Reading file: " ++ filename
     contents <- readFile filename
     return $ follows wc $ ngrams $ Period : syms contents
 
@@ -71,21 +76,44 @@ markovStep mat s = case Map.lookup s mat of
         go2 i ((j, s) : xs) | i < j = s
                             | otherwise = go2 (i - j) xs
 
-writeMarkovChain :: MarkovMat -> IO ()
-writeMarkovChain mat = go Period
+markovSentence :: MarkovMat -> IO [ Sym ]
+markovSentence mat = go Period
     where
         go prev = do
             s <- markovStep mat prev
-            printSym prev s
             if (s == Period) then
-                return ()
+                return $ [ s ]
             else
-                go s
-        printSym _ Period = putStr ".  "
-        printSym _ Comma = putStr ", "
-        printSym (Word _) (Word w) = putStr $ " " ++ w
-        printSym _ (Word w) = putStr w
+                do
+                    t <- go s
+                    return $ s : t
 
+writeSentence :: [ Sym ] -> IO ()
+writeSentence = go Period
+    where
+        go _ [] = putStr "\n"
+        go _ (Period : xs) = do
+            putStr "."
+            go Period xs
+        go _ (Comma : xs) = do
+            putStr ", "
+            go Comma xs
+        go (Word _) (Word s : xs) = do
+            putStr $ " " ++ s
+            go (Word s) xs
+        go _ (Word s : xs) = do
+            putStr s
+            go (Word s) xs
 
 main :: IO ()
-main = putStrLn "Hello, world!"
+main = do
+    args <- getArgs
+    wc <- foldl' wordCountFile (return Map.empty) args
+    let markovMat = makeProbs wc
+    putStrLn "Generating output: "
+    sequence_ $ map (go markovMat) [ 1 .. 10 ]
+        where
+            go mat _ = do
+                sentence <- markovSentence mat
+                writeSentence sentence
+
