@@ -87,3 +87,5 @@ writeMarkovChain mat = go Period
         printSym _ (Word w) = putStr w
 
 
+main :: IO ()
+main = putStrLn "Hello, world!"
