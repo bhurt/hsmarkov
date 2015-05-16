@@ -8,7 +8,7 @@ cabal-init: .cabal-sandbox dist
 dist:
 	cabal configure
 
-.cabal-sandbox: ChatBoxServer.cabal
+.cabal-sandbox: hsmarkov.cabal
 	cabal sandbox init
 	cabal install -j --enable-documentation --haddock-html --haddock-hoogle --only-dependencies
 
